@@ -16,12 +16,16 @@
 package com.mckesson.kafka.connect.utils;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Validator;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 public class ConfigUtils {
@@ -54,6 +58,46 @@ public class ConfigUtils {
     }
 
     return map;
+  }
+
+  public static <E extends Enum<E>> E getEnum(AbstractConfig mapConfig, String enumKey, Class<E> enumClass) {
+    String enumString = mapConfig.getString(enumKey);
+    for (E e : enumClass.getEnumConstants()) {
+      if (e.name().equalsIgnoreCase(enumString)) {
+        return e;
+      }
+    }
+    throw new ConfigException(enumKey, enumString, "Invalid value for enum: " + enumClass);
+  }
+
+  public static <E extends Enum<E>> Validator validEnum(Class<E> enumClass) {
+    return new ValidEnum<E>(enumClass);
+  }
+
+  public static class ValidEnum<E extends Enum<E>> implements Validator {
+    Class<E> enumClass;
+    Set<String> validNames;
+
+    public ValidEnum(Class<E> enumClass) {
+      this.enumClass = enumClass;
+      E[] enums = enumClass.getEnumConstants();
+      validNames = new HashSet<>(enums.length);
+      for (E e : enumClass.getEnumConstants()) {
+        validNames.add(e.name().toUpperCase());
+      }
+
+    }
+
+    @Override
+    public void ensureValid(final String name, final Object value) {
+      if (!validNames.contains(((String) value).toUpperCase())) {
+        throw new ConfigException(name, value, "Invalid value for enum: " + enumClass);
+      }
+    }
+
+    public String toString() {
+      return validNames.toString();
+    }
   }
 
 }
