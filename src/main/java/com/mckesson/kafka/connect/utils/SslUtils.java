@@ -25,16 +25,89 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 public class SslUtils {
 
+  /**
+   * Load configured KeyStore
+   *   
+   * @param config - configuration
+   * @return
+   * @throws Exception
+   */
+  public static KeyStore loadKeyStore(AbstractConfig config) throws Exception {
+    return loadKeyStore(config, null);
+  }
+
+  /**
+   *  Load configured KeyStore
+   *  
+   * @param config - configuration
+   * @param withPrefix - prefix for ssl config
+   * @return
+   * @throws Exception
+   */
+  public static KeyStore loadKeyStore(AbstractConfig config, String withPrefix) throws Exception {
+
+    AbstractConfig sslConfig;
+    if (StringUtils.isBlank(withPrefix)) {
+      sslConfig = config;
+    } else {
+      sslConfig = new SimpleConfig(new ConfigDef().withClientSslSupport(), config.originalsWithPrefix(withPrefix));
+    }
+    return loadKeyStore(sslConfig.getString(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG), sslConfig.getString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG), sslConfig.getPassword(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG));
+  }
+
+  /**
+   * Load configured TrustStore
+   * 
+   * @param config
+   * @return
+   * @throws Exception
+   */
+  public static KeyStore loadTrustStore(AbstractConfig config) throws Exception {
+    return loadTrustStore(config, null);
+  }
+
+  /**
+   * Load configured TrustStore
+   * 
+   * @param config
+   * @param withPrefix
+   * @return
+   * @throws Exception
+   */
+  public static KeyStore loadTrustStore(AbstractConfig config, String withPrefix) throws Exception {
+
+    AbstractConfig sslConfig;
+    if (StringUtils.isBlank(withPrefix)) {
+      sslConfig = config;
+    } else {
+      sslConfig = new SimpleConfig(new ConfigDef().withClientSslSupport(), config.originalsWithPrefix(withPrefix));
+    }
+    return loadKeyStore(sslConfig.getString(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG), sslConfig.getString(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG), sslConfig.getPassword(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+  }
+
+  /**
+   * Load keystore
+   * 
+   * @param storeType
+   * @param storeLoc
+   * @param passwd
+   * @return 
+   *       null if 
+   * @throws Exception
+   */
   public static KeyStore loadKeyStore(String storeType, String storeLoc, Password passwd) throws Exception {
 
-    if (storeLoc == null) {
+    if (StringUtils.isBlank(storeLoc)) {
       return null;
     }
     File f = new File(storeLoc);
@@ -55,27 +128,33 @@ public class SslUtils {
   }
 
   public static SSLContext createSSLContext(AbstractConfig config) throws Exception {
+    return createSSLContext(config, null, true);
+  }
 
-    KeyStore keyStore = SslUtils.loadKeyStore(config.getString(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
-        config.getString(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-        config.getPassword(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG));
+  public static SSLContext createSSLContext(AbstractConfig config, String withPrefix) throws Exception {
+    return createSSLContext(config, withPrefix, true);
+  }
 
-    KeyStore trustStore = SslUtils.loadKeyStore(config.getString(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
-        config.getString(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-        config.getPassword(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+  public static SSLContext createSSLContext(AbstractConfig co, String withPrefix, boolean client) throws Exception {
 
-    SSLContext sslContext;
-    if (keyStore != null && trustStore != null) {
-      final KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-      kmf.init(keyStore, config.getPassword(SslConfigs.SSL_KEY_PASSWORD_CONFIG).value().toCharArray());
-      final TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-      tmf.init(trustStore);
-      sslContext = SSLContext.getInstance(config.getString(SslConfigs.SSL_PROTOCOL_CONFIG));
-      sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+    AbstractConfig sslConfig;
+    if (StringUtils.isBlank(withPrefix)) {
+      sslConfig = co;
     } else {
-      sslContext = SSLContext.getDefault();
+      sslConfig = new SimpleConfig(new ConfigDef().withClientSslSupport(), co.originalsWithPrefix(withPrefix));
     }
 
+    KeyStore keyStore = loadKeyStore(sslConfig);
+    final KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+    Password sslKeyPass = sslConfig.getPassword(SslConfigs.SSL_KEY_PASSWORD_CONFIG); 
+    kmf.init(keyStore, sslKeyPass != null ? sslKeyPass.value().toCharArray() : new char[0]);
+
+    KeyStore trustStore = SslUtils.loadTrustStore(sslConfig);
+    final TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+    tmf.init(trustStore);
+
+    SSLContext sslContext = SSLContext.getInstance(sslConfig.getString(SslConfigs.SSL_PROTOCOL_CONFIG));
+    sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
     return sslContext;
   }
 

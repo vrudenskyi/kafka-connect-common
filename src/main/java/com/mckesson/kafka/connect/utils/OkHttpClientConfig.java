@@ -15,13 +15,11 @@
  */
 package com.mckesson.kafka.connect.utils;
 
-import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -31,8 +29,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.security.ssl.SslFactory;
 
 import okhttp3.Authenticator;
 import okhttp3.ConnectionPool;
@@ -40,27 +36,28 @@ import okhttp3.CookieJar;
 import okhttp3.OkHttpClient;
 
 public class OkHttpClientConfig extends AbstractConfig {
+  public static final String HTTP_CLIENT_PREFIX = "httpClient.";
 
-  public static final String CONNECT_TIMEOUT_CONFIG = "httpClient.connectTimeout";
+  public static final String CONNECT_TIMEOUT_CONFIG = HTTP_CLIENT_PREFIX + "connectTimeout";
   public static final int CONNECT_TIMEOUT_DEFAULT = 30000;
 
-  public static final String SOCKET_TIMEOUT_CONFIG = "httpClient.socketTimeout";
+  public static final String SOCKET_TIMEOUT_CONFIG = HTTP_CLIENT_PREFIX + "socketTimeout";
   public static final int SOCKET_TIMEOUT_DEFAULT = 30000;
 
-  public static final String RETRY_ON_CONN_FAILURE_CONFIG = "httpClient.retryOnConnectionFailure";
+  public static final String RETRY_ON_CONN_FAILURE_CONFIG = HTTP_CLIENT_PREFIX + "retryOnConnectionFailure";
   public static final Boolean RETRY_ON_CONN_FAILURE_DEFAULT = Boolean.TRUE;
 
-  public static final String ENABLE_COOKIES_CONFIG = "httpClient.enableCookies";
+  public static final String ENABLE_COOKIES_CONFIG = HTTP_CLIENT_PREFIX + "enableCookies";
   public static final Boolean ENABLE_COOKIES_DEFAULT = Boolean.FALSE;
 
-  public static final String COOKIEJAR_CONFIG = "httpClient.cookiejar.";
+  public static final String COOKIEJAR_CONFIG = HTTP_CLIENT_PREFIX + "cookiejar.";
   public static final String COOKIEJAR_CLASS_CONFIG = COOKIEJAR_CONFIG + "class";
   public static final Class COOKIEJAR_CLASS_DEFAULT = com.mckesson.kafka.connect.utils.SimpleCookieJar.class;
 
-  public static final String POOL_MAX_IDLE_CONNECTIONS_CONFIG = "httpClient.connectionPool.maxIdleConnections";
+  public static final String POOL_MAX_IDLE_CONNECTIONS_CONFIG = HTTP_CLIENT_PREFIX + "connectionPool.maxIdleConnections";
   public static final Integer POOL_MAX_IDLE_CONNECTIONS_DEFAULT = 5;
 
-  public static final String POOL_KEEP_ALIVE_DURATION_CONFIG = "httpClient.connectionPool.keepAliveDuration";
+  public static final String POOL_KEEP_ALIVE_DURATION_CONFIG = HTTP_CLIENT_PREFIX + "connectionPool.keepAliveDuration";
   public static final Long POOL_KEEP_ALIVE_DURATION_DEFAULT = 5 * 60 * 1000L; //5 minutes
 
   public static final ConfigDef CONFIG = baseConfigDef();
@@ -119,26 +116,18 @@ public class OkHttpClientConfig extends AbstractConfig {
         .cookieJar(cookieJar)
         .retryOnConnectionFailure(conf.getBoolean(RETRY_ON_CONN_FAILURE_CONFIG));
 
-    //try to configure ssl 
-
-    try {
-      TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-      trustManagerFactory.init((KeyStore) null);
-      TrustManager[] trustManagers = trustManagerFactory.getTrustManagers();
-      if (trustManagers.length != 1 || !(trustManagers[0] instanceof X509TrustManager)) {
-        throw new IllegalStateException("Unexpected default trust managers:"
-            + Arrays.toString(trustManagers));
-      }
-      X509TrustManager trustManager = (X509TrustManager) trustManagers[0];
-
-      SslFactory sslF = new SslFactory(Mode.CLIENT);
-      sslF.configure(props);
-      SSLContext sslContext = sslF.sslContext();
-      SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
-      hcb.sslSocketFactory(sslSocketFactory, trustManager);
-    } catch (Exception e) {
-      //ignore
+    // configure ssl/tls 
+    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+    trustManagerFactory.init(SslUtils.loadTrustStore(conf));
+    TrustManager[] trustManagers = trustManagerFactory.getTrustManagers();
+    if (trustManagers.length != 1 || !(trustManagers[0] instanceof X509TrustManager)) {
+      throw new IllegalStateException("Unexpected default trust managers:"
+          + Arrays.toString(trustManagers));
     }
+    X509TrustManager trustManager = (X509TrustManager) trustManagers[0];
+    SSLContext sslContext = SslUtils.createSSLContext(conf);
+    hcb.sslSocketFactory(sslContext.getSocketFactory(), trustManager);
+
     return hcb;
   }
 
