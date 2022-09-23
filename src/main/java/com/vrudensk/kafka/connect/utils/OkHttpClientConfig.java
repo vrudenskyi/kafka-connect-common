@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.mckesson.kafka.connect.utils;
+package com.vrudensk.kafka.connect.utils;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -52,7 +52,7 @@ public class OkHttpClientConfig extends AbstractConfig {
 
   public static final String COOKIEJAR_CONFIG = HTTP_CLIENT_PREFIX + "cookiejar.";
   public static final String COOKIEJAR_CLASS_CONFIG = COOKIEJAR_CONFIG + "class";
-  public static final Class COOKIEJAR_CLASS_DEFAULT = com.mckesson.kafka.connect.utils.SimpleCookieJar.class;
+  public static final Class COOKIEJAR_CLASS_DEFAULT = com.vrudensk.kafka.connect.utils.SimpleCookieJar.class;
 
   public static final String POOL_MAX_IDLE_CONNECTIONS_CONFIG = HTTP_CLIENT_PREFIX + "connectionPool.maxIdleConnections";
   public static final Integer POOL_MAX_IDLE_CONNECTIONS_DEFAULT = 5;

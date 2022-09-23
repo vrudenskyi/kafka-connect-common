@@ -1,7 +1,7 @@
 /**
  * thanks to https://github.com/grahamedgecombe/netty-sni-example
  */
-package com.mckesson.kafka.connect.utils;
+package com.vrudensk.kafka.connect.utils;
 
 import java.net.Socket;
 import java.security.Principal;
